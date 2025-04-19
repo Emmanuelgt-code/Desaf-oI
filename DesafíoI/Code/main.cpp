@@ -94,6 +94,8 @@ int main()
     }
 
     return 0; // Fin del programa
+
+    int totalPixeles = width * height * 3; 
 }
 
 
@@ -268,6 +270,53 @@ unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixel
     return RGB;
 }
 
+/// CAMBIOS
+
+//Transformaciones
+
+ 
+unsigned char* desplazarDerechaImagen(unsigned char* img, int totalPixeles, int bits) {
+    unsigned char* resultado = new unsigned char[totalPixeles];
+    bits %= 8;  // Asegura que bits no sea mayor que 8
+    for (int i = 0; i < totalPixeles; i++) {
+        resultado[i] = img[i] >> bits;  // Desplazamiento a la derecha
+    }
+    return resultado;
+}
+
+// el totalPixeles debe ser columnas * filas
+unsigned char* desplazarIzquierdaImagen(unsigned char* img, int totalPixeles, int bits) {
+    unsigned char* resultado = new unsigned char[totalPixeles];
+    bits %= 8;  // Asegura que bits no sea mayor que 8
+    for (int i = 0; i < totalPixeles; i++) {
+        resultado[i] = img[i] << bits;  // Desplazamiento a la izquierda
+    }
+    return resultado;
+}
+
+
+unsigned char* XOR(unsigned char* img1, unsigned char* img2, int totalPixeles) {
+    unsigned char* resultado = new unsigned char[totalPixeles];
+    for (int i = 0; i < totalPixeles; ++i)
+        resultado[i] = img1[i] ^ img2[i];
+    return resultado;
+}
+
+unsigned char* rotarImagenIzquierda(unsigned char* img, int totalPixeles, int bits) {
+    unsigned char* resultado = new unsigned char[totalPixeles];
+    bits %= 8;
+    for (int i = 0; i < totalPixeles; i++)
+        resultado[i] = (img[i] << bits) | (img[i] >> (8 - bits));
+    return resultado;
+}
+
+unsigned char* rotarImagenDerecha(unsigned char* img, int totalPixeles, int bits) {
+    unsigned char* resultado = new unsigned char[totalPixeles];
+    bits %= 8;
+    for (int i = 0; i < totalPixeles; i++)
+        resultado[i] = (img[i] >> bits) | (img[i] << (8 - bits));
+    return resultado;
+}
 
 
 
