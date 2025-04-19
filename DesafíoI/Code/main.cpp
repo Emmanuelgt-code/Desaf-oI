@@ -35,28 +35,39 @@
 #include <iostream>
 #include <QCoreApplication>
 #include <QImage>
+#include <QString>
+#include <QDir>
 
 using namespace std;
 unsigned char* loadPixels(QString input, int &width, int &height);
 bool exportImage(unsigned char* pixelData, int width,int height, QString archivoSalida);
 unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixels);
+int contarTransformaciones(QString path);
+
 
 int main()
 {
+    QDir dir = QDir::current(); //NUEVO
+    qDebug() << "Directorio de ejecución:" << dir.absolutePath(); //NUEVO
     // Definición de rutas de archivo de entrada (imagen original) y salida (imagen modificada)
-    QString archivoEntrada = "I_O.bmp";
-    QString archivoSalida = "I_D.bmp";
+    /*QString archivoEntrada = "I_O.bmp";
+    QString archivoSalida = "I_D.bmp";*/
+
+    QString ruta = "."; //NUEVO
+    int totalEtapas = contarTransformaciones(ruta); //NUEVO
 
     // Variables para almacenar las dimensiones de la imagen
     int height = 0;
     int width = 0;
 
     // Carga la imagen BMP en memoria dinámica y obtiene ancho y alto
-    unsigned char *pixelData = loadPixels(archivoEntrada, width, height);
+    unsigned char* imgIM = loadPixels("I_M.bmp", width, height);
+    unsigned char* imgMascara = loadPixels("M.bmp", width, height);
+
 
     // Simula una modificación de la imagen asignando valores RGB incrementales
     // (Esto es solo un ejemplo de manipulación artificial)
-    for (int i = 0; i < width * height * 3; i += 3) {
+    /*for (int i = 0; i < width * height * 3; i += 3) {
         pixelData[i] = i;     // Canal rojo
         pixelData[i + 1] = i; // Canal verde
         pixelData[i + 2] = i; // Canal azul
@@ -71,6 +82,7 @@ int main()
     // Libera la memoria usada para los píxeles
     delete[] pixelData;
     pixelData = nullptr;
+*/
 
     // Variables para almacenar la semilla y el número de píxeles leídos del archivo de enmascaramiento
     int seed = 0;
@@ -95,7 +107,6 @@ int main()
 
     return 0; // Fin del programa
 
-    int totalPixeles = width * height * 3; 
 }
 
 
@@ -270,62 +281,68 @@ unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixel
     return RGB;
 }
 
+
 /// CAMBIOS
+
+int contarTransformaciones(QString path) {
+    QDir dir(path);
+    QStringList archivos = dir.entryList(QStringList() << "M*.txt", QDir::Files);
+    qDebug() << "Archivos .txt encontrados:" << archivos;
+
+    int maxIndice = -1;
+    for (const QString& archivo : archivos) {
+        QString nombre = archivo;
+        nombre.remove("M").remove(".txt");  // adaptado a archivos tipo M0.txt
+        bool ok;
+        int indice = nombre.toInt(&ok);
+        if (ok && indice > maxIndice) maxIndice = indice;
+    }
+    return maxIndice + 1;
+}
 
 //Transformaciones
 
- 
-unsigned char* desplazarDerechaImagen(unsigned char* img, int totalPixeles, int bits) {
-    unsigned char* resultado = new unsigned char[totalPixeles];
+
+unsigned char* desplazarDerechaImagen(unsigned char* img, int dataSize, int bits) {
+    unsigned char* resultado = new unsigned char[dataSize];
     bits %= 8;  // Asegura que bits no sea mayor que 8
-    for (int i = 0; i < totalPixeles; i++) {
+    for (int i = 0; i < dataSize; i++) {
         resultado[i] = img[i] >> bits;  // Desplazamiento a la derecha
     }
     return resultado;
 }
 
-// el totalPixeles debe ser columnas * filas
-unsigned char* desplazarIzquierdaImagen(unsigned char* img, int totalPixeles, int bits) {
-    unsigned char* resultado = new unsigned char[totalPixeles];
+// el total Pixeles debe ser columnas * filas
+unsigned char* desplazarIzquierdaImagen(unsigned char* img, int dataSize, int bits) {
+    unsigned char* resultado = new unsigned char[dataSize];
     bits %= 8;  // Asegura que bits no sea mayor que 8
-    for (int i = 0; i < totalPixeles; i++) {
+    for (int i = 0; i < dataSize; i++) {
         resultado[i] = img[i] << bits;  // Desplazamiento a la izquierda
     }
     return resultado;
 }
 
 
-unsigned char* XOR(unsigned char* img1, unsigned char* img2, int totalPixeles) {
-    unsigned char* resultado = new unsigned char[totalPixeles];
-    for (int i = 0; i < totalPixeles; ++i)
+unsigned char* XOR(unsigned char* img1, unsigned char* img2, int dataSize) {
+    unsigned char* resultado = new unsigned char[dataSize];
+    for (int i = 0; i < dataSize; ++i)
         resultado[i] = img1[i] ^ img2[i];
     return resultado;
 }
 
-unsigned char* rotarImagenIzquierda(unsigned char* img, int totalPixeles, int bits) {
-    unsigned char* resultado = new unsigned char[totalPixeles];
+unsigned char* rotarImagenIzquierda(unsigned char* img, int dataSize, int bits) {
+    unsigned char* resultado = new unsigned char[dataSize];
     bits %= 8;
-    for (int i = 0; i < totalPixeles; i++)
+    for (int i = 0; i < dataSize; i++)
         resultado[i] = (img[i] << bits) | (img[i] >> (8 - bits));
     return resultado;
 }
 
-unsigned char* rotarImagenDerecha(unsigned char* img, int totalPixeles, int bits) {
-    unsigned char* resultado = new unsigned char[totalPixeles];
+unsigned char* rotarImagenDerecha(unsigned char* img, int dataSize, int bits) {
+    unsigned char* resultado = new unsigned char[dataSize];
     bits %= 8;
-    for (int i = 0; i < totalPixeles; i++)
+    for (int i = 0; i < dataSize; i++)
         resultado[i] = (img[i] >> bits) | (img[i] << (8 - bits));
     return resultado;
 }
-
-
-
-
-
-
-
-
-
-
-
 
