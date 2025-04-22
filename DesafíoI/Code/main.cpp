@@ -43,75 +43,116 @@ unsigned char* loadPixels(QString input, int &width, int &height);
 bool exportImage(unsigned char* pixelData, int width,int height, QString archivoSalida);
 unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixels);
 int contarTransformaciones(QString path);
+unsigned int* leerArchivoTXT(int etapa, int* seed, int* nPix);
+unsigned char* XOR(unsigned char* img1, unsigned char* img2, int dataSize);
+void checkImageDimensions(const QString& imagePath, unsigned int& width, unsigned int& height);
+unsigned char* extraerBloque(unsigned char* imgP, int width, int height, int block_width, int block_height, int semilla);
 
 
-int main()
-{
-    QDir dir = QDir::current(); //NUEVO
-    qDebug() << "Directorio de ejecución:" << dir.absolutePath(); //NUEVO
-    // Definición de rutas de archivo de entrada (imagen original) y salida (imagen modificada)
-    /*QString archivoEntrada = "I_O.bmp";
-    QString archivoSalida = "I_D.bmp";*/
+int main(){
 
-    QString ruta = "."; //NUEVO
-    int totalEtapas = contarTransformaciones(ruta); //NUEVO
+    QDir dir = QDir::current();
+    qDebug() << "Directorio de ejecución:" << dir.absolutePath();
 
-    // Variables para almacenar las dimensiones de la imagen
-    int height = 0;
+    QString ruta = ".";
+    int totalEtapas = contarTransformaciones(ruta);
+
     int width = 0;
+    int height = 0;
 
-    // Carga la imagen BMP en memoria dinámica y obtiene ancho y alto
     unsigned char* imgIM = loadPixels("I_M.bmp", width, height);
     unsigned char* imgMascara = loadPixels("M.bmp", width, height);
 
-
-    // Simula una modificación de la imagen asignando valores RGB incrementales
-    // (Esto es solo un ejemplo de manipulación artificial)
-    /*for (int i = 0; i < width * height * 3; i += 3) {
-        pixelData[i] = i;     // Canal rojo
-        pixelData[i + 1] = i; // Canal verde
-        pixelData[i + 2] = i; // Canal azul
+    if (!imgIM || !imgMascara) {
+        qDebug() << "Error al cargar I_M.bmp o M.bmp";
+        return 1;
     }
+
+    int totalPix = width * height;
+
+    QString actualFile = QString("P%1.bmp").arg(totalEtapas-1);
+
+    unsigned char* imgP = loadPixels(actualFile, width, height);
+
+    if (!imgP) {
+        qDebug() << "Error al cargar la P " << actualFile;
+        return 1;
+    }
+
+    unsigned char* pixelData = nullptr;  // Aquí se guarda la imagen modificada después de las transformaciones
+
+
+    //Como la idea es conocer el tamaño de la mascara para sacar un pedazo de P igual
+    //checkImageDimensions("I_D.bmp");
+    //checkImageDimensions("I_M.bmp");
+    //checkImageDimensions("M.bmp");
+    //checkImageDimensions("P1.bmp");
+    //checkImageDimensions("P2.bmp");
+
+
+    unsigned int block_width = 0;
+    unsigned int block_height = 0;
+    checkImageDimensions("M.bmp", block_width, block_height);
+
+    //ESTA PARTE QUE SIGUE AUN NO FUNCIONA ERA UN EJEMPLO, PERO ESTA ES LA PARTE DONDE SE HACEN LAS COMBINACIONES y se extrae el bloque
+    for (int etapa = totalEtapas - 1; etapa >= 0; etapa--) {
+        QString archivoTxt = QString("M%1.txt").arg(etapa);
+
+        int seed = 0;
+        int n_pixels = 0;
+
+        unsigned int *maskingData = loadSeedMasking(archivoTxt.toStdString().c_str(), seed, n_pixels);
+        if (!maskingData) {
+            qDebug() << "Error al cargar datos de enmascaramiento de " << archivoTxt;
+            continue;
+        }
+
+        qDebug() << "Etapa" << etapa << "- Semilla:" << seed << "- Pixeles:" << n_pixels;
+
+        unsigned char* bloque = extraerBloque(imgP, width, height, block_width, block_height, seed);
+        if (!bloque) {
+            delete[] maskingData;
+            continue;
+        }
+
+        ///////////AQUI VOYY    YA SE DEBE CONTINUAR CON LAS COMBINACIONES
+        /*XOR se cuenta como 1 combinación (usando una constante fija, por ejemplo 0xAA),
+         *  y cada una de las operaciones SHL, SHR, ROL y ROR tiene 8 combinaciones posibles (
+         *  una por cada desplazamiento de 1 a 8 bits), lo que da un total de 1 + 4×8 = 33 combinaciones.
+         * /
+
+        // Aplica la operación deseada (ej: XOR con bloque)
+        /*pixelData = XOR(imgIM, bloque, width * height * 3);
+
+        // Mostrar primeros valores
+        for (int i = 0; i < std::min(5, n_pixels); ++i) {
+            cout << "Pixel " << i << ": ("
+                 << maskingData[i * 3] << ", "
+                 << maskingData[i * 3 + 1] << ", "
+                 << maskingData[i * 3 + 2] << ")" << endl;
+        }*/
+
+        delete[] maskingData;
+        delete[] bloque;
+    }
+
+    // Definir archivo de salida
+    /*QString archivoSalida = "I_O_FINAL.bmp"; // Aquí defines el nombre de archivo de salida
+
 
     // Exporta la imagen modificada a un nuevo archivo BMP
     bool exportI = exportImage(pixelData, width, height, archivoSalida);
 
     // Muestra si la exportación fue exitosa (true o false)
     cout << exportI << endl;
-
-    // Libera la memoria usada para los píxeles
-    delete[] pixelData;
-    pixelData = nullptr;
-*/
-
-    // Variables para almacenar la semilla y el número de píxeles leídos del archivo de enmascaramiento
-    int seed = 0;
-    int n_pixels = 0;
-
-    // Carga los datos de enmascaramiento desde un archivo .txt (semilla + valores RGB)
-    unsigned int *maskingData = loadSeedMasking("M1.txt", seed, n_pixels);
-
-    // Muestra en consola los primeros valores RGB leídos desde el archivo de enmascaramiento
-    for (int i = 0; i < n_pixels * 3; i += 3) {
-        cout << "Pixel " << i / 3 << ": ("
-             << maskingData[i] << ", "
-             << maskingData[i + 1] << ", "
-             << maskingData[i + 2] << ")" << endl;
-    }
-
-    // Libera la memoria usada para los datos de enmascaramiento
-    if (maskingData != nullptr){
-        delete[] maskingData;
-        maskingData = nullptr;
-    }
-
+    */
     return 0; // Fin del programa
 
 }
 
 
 unsigned char* loadPixels(QString input, int &width, int &height){
-/*
+    /*
  * @brief Carga una imagen BMP desde un archivo y extrae los datos de píxeles en formato RGB.
  *
  * Esta función utiliza la clase QImage de Qt para abrir una imagen en formato BMP, convertirla al
@@ -162,7 +203,7 @@ unsigned char* loadPixels(QString input, int &width, int &height){
 }
 
 bool exportImage(unsigned char* pixelData, int width,int height, QString archivoSalida){
-/*
+    /*
  * @brief Exporta una imagen en formato BMP a partir de un arreglo de píxeles en formato RGB.
  *
  * Esta función crea una imagen de tipo QImage utilizando los datos contenidos en el arreglo dinámico
@@ -207,7 +248,7 @@ bool exportImage(unsigned char* pixelData, int width,int height, QString archivo
 }
 
 unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixels){
-/*
+    /*
  * @brief Carga la semilla y los resultados del enmascaramiento desde un archivo de texto.
  *
  * Esta función abre un archivo de texto que contiene una semilla en la primera línea y,
@@ -346,3 +387,48 @@ unsigned char* rotarImagenDerecha(unsigned char* img, int dataSize, int bits) {
     return resultado;
 }
 
+unsigned int* leerArchivoTXT(int etapa, int* seed, int* nPix) {
+    char nombreArchivo[20];
+    sprintf(nombreArchivo, "M%d.txt", etapa);
+    return loadSeedMasking(nombreArchivo, *seed, *nPix);
+}
+
+//Este sirve para mirar el tamaño de la mascara
+void checkImageDimensions(const QString& imagePath, unsigned int& width, unsigned int& height) {
+    QImage image(imagePath);
+    if (image.isNull()) {
+        qDebug() << "La imagen no se pudo cargar:" << imagePath;
+    } else {
+        width = image.width();
+        height = image.height();
+        qDebug() << "Dimensiones de" << imagePath << ":" << width << "x" << height;
+    }
+}
+
+//Extrae el pedacito de p del tamaño del .txt
+unsigned char* extraerBloque(unsigned char* imgP, int width, int height, int block_width, int block_height, int semilla) {
+    int x_inicio = semilla % width;
+    int y_inicio = semilla / width;
+
+    // Verificar límites
+    if (x_inicio + block_width > width || y_inicio + block_height > height) {
+        cout << "El bloque excede los límites de la imagen.\n";
+        return nullptr;
+    }
+
+    // Reservar memoria para el bloque
+    unsigned char* bloque = new unsigned char[block_width * block_height * 3];
+
+    for (int i = 0; i < block_height; ++i) {
+        for (int j = 0; j < block_width; ++j) {
+            int srcIndex = ((y_inicio + i) * width + (x_inicio + j)) * 3;
+            int dstIndex = (i * block_width + j) * 3;
+
+            bloque[dstIndex]     = imgP[srcIndex];
+            bloque[dstIndex + 1] = imgP[srcIndex + 1];
+            bloque[dstIndex + 2] = imgP[srcIndex + 2];
+        }
+    }
+
+    return bloque;
+}
