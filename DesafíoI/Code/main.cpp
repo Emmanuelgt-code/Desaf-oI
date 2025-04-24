@@ -38,6 +38,12 @@
 #include <QString>
 #include <QDir>
 
+#include <cstring> // Para memcpy
+#include <bitset>
+#define DEBUG
+using std::bitset;
+
+
 using namespace std;
 unsigned char* loadPixels(QString input, int &width, int &height);
 bool exportImage(unsigned char* pixelData, int width,int height, QString archivoSalida);
@@ -46,7 +52,32 @@ int contarTransformaciones(QString path);
 unsigned int* leerArchivoTXT(int etapa, int* seed, int* nPix);
 unsigned char* XOR(unsigned char* img1, unsigned char* img2, int dataSize);
 void checkImageDimensions(const QString& imagePath, unsigned int& width, unsigned int& height);
-unsigned char* extraerBloque(unsigned char* imgP, int width, int height, int block_width, int block_height, int semilla);
+unsigned char* extraerBloqueIM(unsigned char* imgIM, int width, int height, int block_width, int block_height, int semilla);
+unsigned char* extraerBloqueP(unsigned char* imgP, int width, int height, int block_width, int block_height, int semilla);
+int calcularDiferencia(unsigned char* bloqueTransformado, unsigned int* datosEnmascarados, int n_pixels, bool ignorarDesplazamiento);
+
+int identificarTransformacion(unsigned char* bloque, unsigned char* imgMascara, unsigned int* datosEnmascarados, int dataSize, int n_pixels, unsigned char* bloqueIM);
+unsigned char* aplicarTransformacionInversa(unsigned char* imgP, int tipo, int dataSize, unsigned char* imgIM);
+
+
+
+const char* nombresTransformaciones[33] = {
+    "XOR", "Desplazamiento a la izquierda 1 bit", "Desplazamiento a la izquierda 2 bits", "Desplazamiento a la izquierda 3 bits",
+    "Desplazamiento a la izquierda 4 bits", "Desplazamiento a la izquierda 5 bits", "Desplazamiento a la izquierda 6 bits",
+    "Desplazamiento a la izquierda 7 bits", "Desplazamiento a la izquierda 8 bits",
+
+    "Desplazamiento a la derecha 1 bit", "Desplazamiento a la derecha 2 bits", "Desplazamiento a la derecha 3 bits",
+    "Desplazamiento a la derecha 4 bits", "Desplazamiento a la derecha 5 bits", "Desplazamiento a la derecha 6 bits",
+    "Desplazamiento a la derecha 7 bits", "Desplazamiento a la derecha 8 bits",
+
+    "Rotación a la izquierda 1 bit", "Rotación a la izquierda 2 bits", "Rotación a la izquierda 3 bits",
+    "Rotación a la izquierda 4 bits", "Rotación a la izquierda 5 bits", "Rotación a la izquierda 6 bits",
+    "Rotación a la izquierda 7 bits", "Rotación a la izquierda 8 bits",
+
+    "Rotación a la derecha 1 bit", "Rotación a la derecha 2 bits", "Rotación a la derecha 3 bits",
+    "Rotación a la derecha 4 bits", "Rotación a la derecha 5 bits", "Rotación a la derecha 6 bits",
+    "Rotación a la derecha 7 bits", "Rotación a la derecha 8 bits"
+};
 
 
 int main(){
@@ -60,22 +91,33 @@ int main(){
     int width = 0;
     int height = 0;
 
+    int widthMascara=0, heightMascara=0;
+
     unsigned char* imgIM = loadPixels("I_M.bmp", width, height);
-    unsigned char* imgMascara = loadPixels("M.bmp", width, height);
+    unsigned char* imgMascara = loadPixels("M.bmp", widthMascara, heightMascara);
+    for(int i=0;i<2;i++){
+        cout<<"MASCARA:";
+        cout<<(int)imgMascara[i]<<endl;
+    };
+    cout << "Tamaño de I_M.bmp: " << width << " x " << height << endl;
+    cout << "Tamaño de M.bmp: " << widthMascara << " x " << heightMascara << endl;
 
-    if (!imgIM || !imgMascara) {
-        qDebug() << "Error al cargar I_M.bmp o M.bmp";
-        return 1;
-    }
 
-    int totalPix = width * height;
 
-    QString actualFile = QString("P%1.bmp").arg(totalEtapas-1);
+    int totalPix = width * height *3;
+
+    /*QString actualFile = QString("P%1.bmp").arg(totalEtapas-1);
 
     unsigned char* imgP = loadPixels(actualFile, width, height);
 
     if (!imgP) {
         qDebug() << "Error al cargar la P " << actualFile;
+        return 1;
+    }*/
+
+    unsigned char* imgP = loadPixels("I_D.bmp", width, height);
+    if (!imgP) {
+        qDebug() << "Error al cargar I_D.bmp";
         return 1;
     }
 
@@ -83,11 +125,6 @@ int main(){
 
 
     //Como la idea es conocer el tamaño de la mascara para sacar un pedazo de P igual
-    //checkImageDimensions("I_D.bmp");
-    //checkImageDimensions("I_M.bmp");
-    //checkImageDimensions("M.bmp");
-    //checkImageDimensions("P1.bmp");
-    //checkImageDimensions("P2.bmp");
 
 
     unsigned int block_width = 0;
@@ -96,24 +133,72 @@ int main(){
 
     //ESTA PARTE QUE SIGUE AUN NO FUNCIONA ERA UN EJEMPLO, PERO ESTA ES LA PARTE DONDE SE HACEN LAS COMBINACIONES y se extrae el bloque
     for (int etapa = totalEtapas - 1; etapa >= 0; etapa--) {
+
         QString archivoTxt = QString("M%1.txt").arg(etapa);
 
         int seed = 0;
         int n_pixels = 0;
 
+        // maskingData son los .txt
         unsigned int *maskingData = loadSeedMasking(archivoTxt.toStdString().c_str(), seed, n_pixels);
         if (!maskingData) {
             qDebug() << "Error al cargar datos de enmascaramiento de " << archivoTxt;
             continue;
         }
+        for(int i=0;i<2;i++){
+            cout<<"Masking data:";
+            cout<<(int)maskingData[i]<<endl;
+        };
 
         qDebug() << "Etapa" << etapa << "- Semilla:" << seed << "- Pixeles:" << n_pixels;
 
-        unsigned char* bloque = extraerBloque(imgP, width, height, block_width, block_height, seed);
+        //bloque es de P_n
+        unsigned char* bloque = extraerBloqueP(imgP, width, height, block_width, block_height, seed);
         if (!bloque) {
             delete[] maskingData;
             continue;
         }
+        for(int i=0;i<2;i++){
+            cout<<"P:";
+            cout<<(int)bloque[i]<<endl;
+        };
+
+
+
+        unsigned char* bloqueIM = extraerBloqueIM(imgIM, width, height, block_width, block_height, seed);
+        for(int i=0;i<2;i++){
+            cout<<"IM:";
+            cout<<(int)bloqueIM[i]<<endl;
+        };
+
+        int tipoTransformacion = identificarTransformacion(bloque, imgMascara, maskingData, block_width * block_height * 3, n_pixels, bloqueIM);
+
+        //qDebug() << "Transformación identificada (índice):" << tipoTransformacion;
+        // Al identificar el tipo de transformación
+
+        if (tipoTransformacion >= 0 && tipoTransformacion < 33) {
+            cout << "Etapa " << etapa << ": " << nombresTransformaciones[tipoTransformacion] << endl;
+        } else {
+            cout << "Etapa " << etapa << ": transformación desconocida (índice " << tipoTransformacion << ")" << endl;
+        }
+        //nt dataSize_block = block_width * block_height * 3;
+        unsigned char* imgP_n_menos_1 = aplicarTransformacionInversa(imgP, tipoTransformacion, totalPix, imgIM);
+
+        //unsigned char* imgP_n_menos_1 = aplicarTransformacionInversa(bloque, tipoTransformacion, width * height * 3, bloqueIM);
+
+
+        // Liberar la imagen anterior
+        delete[] imgP;
+
+        // Avanzar a la nueva etapa
+        imgP = imgP_n_menos_1;
+
+        QString nombreEtapa = QString("P_reconstruida_%1.bmp").arg(etapa);
+        exportImage(imgP, width, height, nombreEtapa);
+        qDebug() << "Imagen guardada:" << nombreEtapa;
+
+
+        //delete[] bloqueMascara;
 
         ///////////AQUI VOYY    YA SE DEBE CONTINUAR CON LAS COMBINACIONES
         /*XOR se cuenta como 1 combinación (usando una constante fija, por ejemplo 0xAA),
@@ -135,6 +220,12 @@ int main(){
         delete[] maskingData;
         delete[] bloque;
     }
+
+    QString archivoSalida = "I_O_RECUPERADA.bmp";
+    bool exportI = exportImage(imgP, width, height, archivoSalida);
+    cout << "Exportación final:" << exportI << endl;
+    delete[] imgP;  // liberar memoria final
+
 
     // Definir archivo de salida
     /*QString archivoSalida = "I_O_FINAL.bmp"; // Aquí defines el nombre de archivo de salida
@@ -166,7 +257,7 @@ unsigned char* loadPixels(QString input, int &width, int &height){
  * @return Puntero a un arreglo dinámico que contiene los datos de los píxeles en formato RGB.
  *         Devuelve nullptr si la imagen no pudo cargarse.
  *
- * @note Es responsabilidad del usuario liberar la memoria asignada al arreglo devuelto usando `delete[]`.
+ * @note Es responsabilidad del usuario liberar la memoria asignada al arreglo devuelto usando delete[].
  */
 
     // Cargar la imagen BMP desde el archivo especificado (usando Qt)
@@ -198,6 +289,14 @@ unsigned char* loadPixels(QString input, int &width, int &height){
         memcpy(dstLine, srcLine, width * 3);                    // Copia los píxeles RGB de esa línea (sin padding)
     }
 
+    cout << "Dimensiones leídas: " << width << " x " << height << endl;
+    cout << "Bytes esperados: " << width * height * 3 << endl;
+    cout << "Primeros 104 bytes: ";
+    for (int i = 0; i < 104; ++i)
+        cout << (int)pixelData[i] << " ";
+    cout << endl;
+
+
     // Retorna el puntero al arreglo de datos de píxeles cargado en memoria
     return pixelData;
 }
@@ -207,7 +306,7 @@ bool exportImage(unsigned char* pixelData, int width,int height, QString archivo
  * @brief Exporta una imagen en formato BMP a partir de un arreglo de píxeles en formato RGB.
  *
  * Esta función crea una imagen de tipo QImage utilizando los datos contenidos en el arreglo dinámico
- * `pixelData`, que debe representar una imagen en formato RGB888 (3 bytes por píxel, sin padding).
+ * pixelData, que debe representar una imagen en formato RGB888 (3 bytes por píxel, sin padding).
  * A continuación, copia los datos línea por línea a la imagen de salida y guarda el archivo resultante
  * en formato BMP en la ruta especificada.
  *
@@ -282,6 +381,7 @@ unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixel
 
     // Contar cuántos grupos de valores RGB hay en el archivo
     // Se asume que cada línea después de la semilla tiene tres valores (r, g, b)
+    n_pixels = 0;
     while (archivo >> r >> g >> b) {
         n_pixels++;  // Contamos la cantidad de píxeles
     }
@@ -366,6 +466,11 @@ unsigned char* desplazarIzquierdaImagen(unsigned char* img, int dataSize, int bi
 
 unsigned char* XOR(unsigned char* img1, unsigned char* img2, int dataSize) {
     unsigned char* resultado = new unsigned char[dataSize];
+    cout << "Verificación exacta:\n";
+    cout << "P[0]: " << (int)img1[0] << " (bin: " << bitset<8>(img1[0]) << ")\n";
+    cout << "IM[0]: " << (int)img2[0] << " (bin: " << bitset<8>(img2[0]) << ")\n";
+    cout << "XOR: " << (int)(img1[0] ^ img2[0]) << " (bin: " << bitset<8>(img1[0] ^ img2[0]) << ")\n";
+
     for (int i = 0; i < dataSize; ++i)
         resultado[i] = img1[i] ^ img2[i];
     return resultado;
@@ -406,29 +511,158 @@ void checkImageDimensions(const QString& imagePath, unsigned int& width, unsigne
 }
 
 //Extrae el pedacito de p del tamaño del .txt
-unsigned char* extraerBloque(unsigned char* imgP, int width, int height, int block_width, int block_height, int semilla) {
-    int x_inicio = semilla % width;
-    int y_inicio = semilla / width;
+unsigned char* extraerBloqueIM(unsigned char* imgIM, int width, int height, int widthMascara, int heightMascara, int seed) {
+    // Tamaño de la máscara (número de bytes a extraer)
+    int mascaraSize = widthMascara * heightMascara * 3; // Cada píxel tiene 3 componentes (RGB)
 
-    // Verificar límites
-    if (x_inicio + block_width > width || y_inicio + block_height > height) {
-        cout << "El bloque excede los límites de la imagen.\n";
+    // Calculamos el inicio en la imagen imgIM
+    int startIndex = seed; // Cada píxel tiene 3 valores (RGB), por lo que multiplicamos por 3 para obtener la posición correcta.
+
+    // Verificamos si la semilla está dentro del rango válido
+    if (startIndex >= width * height * 3 || startIndex < 0) {
+        std::cerr << "Error: Semilla fuera de rango." << std::endl;
         return nullptr;
     }
 
-    // Reservar memoria para el bloque
-    unsigned char* bloque = new unsigned char[block_width * block_height * 3];
+    // Reservamos memoria para el bloque extraído
+    unsigned char* bloqueExtraidoIM = new unsigned char[mascaraSize];
 
-    for (int i = 0; i < block_height; ++i) {
-        for (int j = 0; j < block_width; ++j) {
-            int srcIndex = ((y_inicio + i) * width + (x_inicio + j)) * 3;
-            int dstIndex = (i * block_width + j) * 3;
+    // Copiamos los píxeles desde imgIM en el rango determinado por la semilla y el tamaño de la máscara
+    memcpy(bloqueExtraidoIM, imgIM + startIndex, mascaraSize);
 
-            bloque[dstIndex]     = imgP[srcIndex];
-            bloque[dstIndex + 1] = imgP[srcIndex + 1];
-            bloque[dstIndex + 2] = imgP[srcIndex + 2];
-        }
+    return bloqueExtraidoIM;
+}
+
+unsigned char* extraerBloqueP(unsigned char* imgP, int width, int height, int widthMascara, int heightMascara, int seed) {
+    // Tamaño de la máscara (número de bytes a extraer)
+    int mascaraSize = widthMascara * heightMascara * 3; // Cada píxel tiene 3 componentes (RGB)
+
+    // Calculamos el inicio en la imagen imgIM
+    int startIndex = seed; // Cada píxel tiene 3 valores (RGB), por lo que multiplicamos por 3 para obtener la posición correcta.
+
+    // Verificamos si la semilla está dentro del rango válido
+    if (startIndex >= width * height * 3 || startIndex < 0) {
+        std::cerr << "Error: Semilla fuera de rango." << std::endl;
+        return nullptr;
     }
 
-    return bloque;
+    // Reservamos memoria para el bloque extraído
+    unsigned char* bloqueExtraidoP = new unsigned char[mascaraSize];
+
+    // Copiamos los píxeles desde imgIM en el rango determinado por la semilla y el tamaño de la máscara
+    memcpy(bloqueExtraidoP, imgP + startIndex, mascaraSize);
+
+    return bloqueExtraidoP;
+}
+
+
+//NUEVOS CAMBIOS YA PARA LA COMBINACION
+int calcularDiferencia(unsigned int* bloqueTransformado, unsigned int* datosEnmascarados, int n_pixels, bool ignorarDesplazamiento) {
+    int diferencia = 0;
+
+    // Iteramos sobre los píxeles
+    for (int i = 0; i < n_pixels * 3; ++i) {
+        // Imprimir los valores de bloqueTransformado y datosEnmascarados para ver lo que estamos comparando
+        /*cout << "Píxel " << i << " bloqueTransformado: " << (int)bloqueTransformado[i]
+             << " datosEnmascarados: " << (int)datosEnmascarados[i] << endl;
+*/
+        // Si ignoramos desplazamientos, no calculamos la diferencia
+        if (ignorarDesplazamiento) {
+            continue;
+        }
+
+        // Si no estamos ignorando, calculamos la diferencia normal
+        diferencia += abs((int)bloqueTransformado[i] - (int)datosEnmascarados[i]);
+    }
+
+    return diferencia;
+}
+
+
+
+
+
+// Función que prueba cada combinación
+int identificarTransformacion(unsigned char* bloque, unsigned char* imgMascara, unsigned int* datosEnmascarados, int dataSize, int n_pixels, unsigned char* bloqueIM) {
+    int mejorIndice = -1;
+    int menorDiferencia = INT_MAX;
+
+    for (int tipo = 0; tipo < 33; ++tipo) {
+        /*if (tipo == 0) {
+            unsigned char* transformado = aplicarTransformacionInversa(bloque, tipo, dataSize, bloqueIM);
+
+            for (int i = 0; i < dataSize; ++i) {
+                int suma = (int)transformado[i] + (int)imgMascara[i];
+                cout << "transformado: " << (int)transformado[i]
+                     << " + mascara: " << (int)imgMascara[i]
+                     << " = " << suma << " -> " << (suma % 256) << endl;
+                transformado[i] = (unsigned char)(suma % 256);
+            }
+
+            delete[] transformado; // ¡no olvides liberar la memoria también aquí!
+            break;
+        }*/
+
+        unsigned char* transformado = aplicarTransformacionInversa(bloque, tipo, dataSize, bloqueIM);
+
+        // Arreglo auxiliar para guardar la suma sin truncar
+        unsigned int* sumaCompleta = new unsigned int[dataSize];
+
+        for (int i = 0; i < dataSize; ++i) {
+            int suma = (int)transformado[i] + (int)imgMascara[i];
+            sumaCompleta[i] = suma;
+
+            /*cout << "Transformado: " << (int)transformado[i]
+                 << "  Mascara: " << (int)imgMascara[i]
+                 << "  Suma sin recorte: " << suma << endl;*/
+        }
+
+
+
+
+        // Verificamos si es un desplazamiento y, si lo es, no calculamos la diferencia
+        bool ignorarDesplazamiento = (tipo >= 1 && tipo <= 16);
+        // Si es un desplazamiento, no calculamos la diferencia
+        int dif = 100000;
+        if (!ignorarDesplazamiento) {
+            dif = calcularDiferencia(sumaCompleta, datosEnmascarados, n_pixels, false);
+        }
+        else{
+            dif=100000;
+        }
+
+//LO VAMOS A QUITARRR
+#ifdef DEBUG
+        cout << "Tipo " << tipo << " (" << nombresTransformaciones[tipo] << "): diferencia = " << dif << endl;
+#endif
+
+        if (dif < menorDiferencia) {
+            menorDiferencia = dif;
+            mejorIndice = tipo;
+            if (dif == 0) {
+                delete[] transformado;
+                break;  // transformación exacta encontrada
+            }
+        }
+
+        delete[] transformado;
+    }
+
+    return mejorIndice;  // devuelve el índice de la transformación inversa usada
+}
+
+unsigned char* aplicarTransformacionInversa(unsigned char* imgP, int tipo, int dataSize, unsigned char* imgIM) {
+
+
+    if (tipo == 0)
+        return XOR(imgP, imgIM, dataSize);
+    else if (tipo >= 1 && tipo <= 8)
+        return desplazarIzquierdaImagen(imgP, dataSize, tipo);
+    else if (tipo >= 9 && tipo <= 16)
+        return desplazarDerechaImagen(imgP, dataSize, tipo - 8);
+    else if (tipo >= 17 && tipo <= 24)
+        return rotarImagenIzquierda(imgP, dataSize, tipo - 16);
+    else if (tipo >= 25 && tipo <= 32)
+        return rotarImagenDerecha(imgP, dataSize, tipo - 24);
+    return nullptr;
 }
