@@ -31,11 +31,18 @@
  * Asistencia de ChatGPT para mejorar la forma y presentación del código fuente
  */
 
+
+
+//AUTORES:
+
+//Emmanuel Guerra Tuberquia
+//Maria Valentina Quiroga Alzate
+
 #include <fstream>
 #include <iostream>
 #include <QCoreApplication>
 #include <QImage>
-#include <cstdio>  // solo para sprintf
+#include <cstdio>  //Solo para sprintf
 
 using namespace std;
 
@@ -44,7 +51,11 @@ bool exportImage(unsigned char* pixelData, int width,int height, QString archivo
 unsigned int* loadSeedMasking(const char* nombreArchivo, int &seed, int &n_pixels);
 
 int contarTransformaciones();
+unsigned char* desplazarDerechaImagen(unsigned char* img, int dataSize, int bits);
+unsigned char* desplazarIzquierdaImagen(unsigned char* img, int dataSize, int bits);
 unsigned char* XOR(unsigned char* img1, unsigned char* img2, int dataSize);
+unsigned char* rotarImagenIzquierda(unsigned char* img, int dataSize, int bits);
+unsigned char* rotarImagenDerecha(unsigned char* img, int dataSize, int bits);
 unsigned char* extraerBloqueIM(unsigned char* imgIM, int width, int height, int widthMascara, int heightMascara, int semilla);
 unsigned char* extraerBloqueP(unsigned char* imgP, int width, int height, int widthMascara, int heightMascara, int semilla);
 int calcularDiferencia(unsigned char* bloqueTransformado, unsigned int* datosEnmascarados, int n_pixels, bool ignorarDesplazamiento);
@@ -114,7 +125,7 @@ int main(){
         };*/
 
         //Para confirma en que estapa esta y si está leyendo bien la semilla
-        qDebug() << "Etapa" << etapa << " Semilla:" << seed << " Pixeles:" << n_pixels;
+        //qDebug() << "Etapa" << etapa << " Semilla:" << seed << " Pixeles:" << n_pixels;
 
         //La variable bloque es de P_n
         unsigned char* bloque = extraerBloqueP(imgP, width, height, widthMascara, heightMascara, seed);
